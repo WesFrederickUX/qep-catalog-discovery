@@ -35,16 +35,19 @@ async function loadCategories() {
     list.appendChild(selectAllItem);
     selectAllItem.querySelector('input').addEventListener('change', onSelectAllCategories);
 
-    // Top-level categories first, then children
-    const parents  = _categories.filter(c => !c.parentId);
-    const children = _categories.filter(c =>  c.parentId);
-
-    for (const cat of parents) {
-      appendCategoryItem(list, cat, false);
-      for (const child of children.filter(c => c.parentId === cat.catId)) {
-        appendCategoryItem(list, child, true);
-      }
+    // Build parent→children map and render tree
+    const childMap = {};
+    for (const cat of _categories) {
+      const pid = cat.parentId ?? '__root__';
+      if (!childMap[pid]) childMap[pid] = [];
+      childMap[pid].push(cat);
     }
+    const treeRoot = document.createElement('div');
+    treeRoot.className = 'cd-tree-root';
+    for (const cat of (childMap['__root__'] ?? [])) {
+      treeRoot.appendChild(buildTreeNode(cat, childMap));
+    }
+    list.appendChild(treeRoot);
 
     document.getElementById('load-btn').disabled = false;
   } catch (err) {
@@ -52,30 +55,98 @@ async function loadCategories() {
   }
 }
 
-function appendCategoryItem(list, cat, isChild) {
-  const id   = 'cat-' + cat.catId;
-  const item = document.createElement('div');
-  item.className = 'cd-category-item' + (isChild ? ' child' : '');
-  item.dataset.catUri = cat.catUri;
-  item.innerHTML = `<input type="checkbox" id="${id}" value="${esc(cat.catUri)}"><label for="${id}">${esc(cat.description)}</label>`;
-  list.appendChild(item);
-  item.querySelector('input').addEventListener('change', onCategoryChange);
+// ── Category tree ─────────────────────────────────────────────────────────
+
+function buildTreeNode(cat, childMap) {
+  const children   = childMap[cat.catId] ?? [];
+  const hasChildren = children.length > 0;
+
+  const node = document.createElement('div');
+  node.className = 'cd-tree-node';
+  node.dataset.catId = String(cat.catId);
+
+  const row = document.createElement('div');
+  row.className = 'cd-tree-row';
+
+  // Toggle arrow — level 0 starts expanded, deeper levels start collapsed
+  const toggle = document.createElement('span');
+  toggle.className = 'cd-tree-toggle';
+  if (hasChildren) {
+    toggle.textContent = '▶';
+    node.classList.add('collapsed');
+    toggle.addEventListener('click', e => {
+      e.stopPropagation();
+      const nowCollapsed = node.classList.toggle('collapsed');
+      toggle.textContent = nowCollapsed ? '▶' : '▼';
+    });
+  }
+
+  const id = 'cat-' + cat.catId;
+  const cb = document.createElement('input');
+  cb.type    = 'checkbox';
+  cb.id      = id;
+  cb.value   = cat.catUri;
+  cb.addEventListener('change', () => {
+    cascadeCheck(node, cb.checked);
+    updateAncestors(node);
+    syncSelectAll();
+  });
+
+  const label = document.createElement('label');
+  label.htmlFor    = id;
+  label.textContent = cat.description;
+
+  row.appendChild(toggle);
+  row.appendChild(cb);
+  row.appendChild(label);
+  node.appendChild(row);
+
+  if (hasChildren) {
+    const childContainer = document.createElement('div');
+    childContainer.className = 'cd-tree-children';
+    for (const child of children) {
+      childContainer.appendChild(buildTreeNode(child, childMap));
+    }
+    node.appendChild(childContainer);
+  }
+
+  return node;
+}
+
+// Check/uncheck all checkboxes within a node (including the node itself)
+function cascadeCheck(node, checked) {
+  for (const cb of node.querySelectorAll('input[type="checkbox"]')) {
+    cb.checked = checked;
+  }
+}
+
+// Walk up the tree: a parent is checked iff all its direct-child checkboxes are checked
+function updateAncestors(node) {
+  let current = node.parentElement?.closest('.cd-tree-node');
+  while (current) {
+    const parentCb  = current.querySelector(':scope > .cd-tree-row input[type="checkbox"]');
+    const childCbs  = [...current.querySelectorAll(':scope > .cd-tree-children input[type="checkbox"]')];
+    if (parentCb && childCbs.length) {
+      parentCb.checked = childCbs.every(c => c.checked);
+    }
+    current = current.parentElement?.closest('.cd-tree-node');
+  }
+}
+
+function syncSelectAll() {
+  const allCbs   = [...document.querySelectorAll('#category-list .cd-tree-node input[type="checkbox"]')];
+  const selectAll = document.querySelector('#cat-select-all');
+  if (selectAll) selectAll.checked = allCbs.length > 0 && allCbs.every(cb => cb.checked);
 }
 
 function onSelectAllCategories(e) {
-  const checkboxes = [...document.querySelectorAll('#category-list .cd-category-item:not(.cd-category-select-all) input[type="checkbox"]')];
-  checkboxes.forEach(cb => { cb.checked = e.target.checked; });
-}
-
-function onCategoryChange() {
-  const allCbs     = [...document.querySelectorAll('#category-list .cd-category-item:not(.cd-category-select-all) input[type="checkbox"]')];
-  const allChecked = allCbs.length > 0 && allCbs.every(cb => cb.checked);
-  const selectAll  = document.querySelector('#cat-select-all');
-  if (selectAll) selectAll.checked = allChecked;
+  for (const cb of document.querySelectorAll('#category-list .cd-tree-node input[type="checkbox"]')) {
+    cb.checked = e.target.checked;
+  }
 }
 
 function getCheckedCatUris() {
-  return [...document.querySelectorAll('#category-list .cd-category-item:not(.cd-category-select-all) input:checked')]
+  return [...document.querySelectorAll('#category-list .cd-tree-node input:checked')]
     .map(cb => cb.value)
     .filter(Boolean);
 }
@@ -132,13 +203,23 @@ function loadCatalog() {
 
   const _flushTimer = setInterval(flushBuffer, 200);
 
+  let _total = null;
+
+  es.addEventListener('total', e => {
+    _total = JSON.parse(e.data).total;
+    console.log('[catalog] total event received:', _total);
+    document.getElementById('loading-text').textContent =
+      `Loading catalog… 0 of ~${_total} titles found`;
+  });
+
   es.addEventListener('title', e => {
     const title = JSON.parse(e.data);
     _allTitles.push(title);
     _buffer.push(title);
     if (_buffer.length >= 50) flushBuffer();
+    const suffix = _total != null ? ` of ~${_total}` : '';
     document.getElementById('loading-text').textContent =
-      `Loading catalog… ${_allTitles.length} titles found`;
+      `Loading catalog… ${_allTitles.length}${suffix} titles found`;
   });
 
   es.addEventListener('progress', e => {

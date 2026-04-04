@@ -111,8 +111,20 @@ router.get('/titles', async (req, res) => {
     let excluded = 0;
     let fetched  = 0;
 
+    let firstPage = true;
+
     while (!closed) {
-      const { titles } = await module.fetchTitles(filters, start);
+      const { titles, total } = await module.fetchTitles(filters, start);
+
+      if (firstPage) {
+        firstPage = false;
+        if (!closed) {
+          res.write(`event: total\ndata: ${JSON.stringify({ total })}\n\n`);
+          // Flush so the total event reaches the client before any title events
+          if (typeof res.flush === 'function') res.flush();
+          else res.socket?.write('');
+        }
+      }
 
       if (!titles.length) break;
 
@@ -139,8 +151,8 @@ router.get('/titles', async (req, res) => {
         }
       }
 
-      if (titles.length < 25) break;
-      start += 25;
+      if (titles.length < 250) break;
+      start += 250;
 
       if (!closed) await new Promise(r => setTimeout(r, 200));
     }

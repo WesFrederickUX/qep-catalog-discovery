@@ -3,7 +3,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --sidebar-width: 260px;
+  --sidebar-width: 350px;
   --primary: #5c6ac4;
   --primary-hover: #4959bd;
   --border: #e1e3e5;
@@ -115,7 +115,7 @@ body {
 /* ── Category list ──────────────────────────────────────────────────────── */
 
 .cd-category-list {
-  max-height: 240px;
+  max-height: 340px;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -129,22 +129,14 @@ body {
   font-style: italic;
 }
 
+/* Select All sticky row */
 .cd-category-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.3rem 0.75rem;
   font-size: 0.85rem;
-  cursor: pointer;
   user-select: none;
-}
-
-.cd-category-item:hover { background: rgba(0,0,0,0.03); }
-
-.cd-category-item.child {
-  padding-left: 1.75rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
 }
 
 .cd-category-select-all {
@@ -155,6 +147,60 @@ body {
   background: var(--card-bg);
   z-index: 1;
 }
+
+/* ── Category tree ──────────────────────────────────────────────────────── */
+
+.cd-tree-root {
+  padding: 0.25rem 0;
+}
+
+.cd-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.875rem;
+  cursor: default;
+  user-select: none;
+}
+
+.cd-tree-row:hover { background: rgba(0,0,0,0.03); border-radius: 3px; }
+
+.cd-tree-toggle {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: center;
+  line-height: 1;
+}
+
+.cd-tree-toggle:hover { color: var(--text); }
+
+.cd-tree-row label {
+  cursor: pointer;
+  flex: 1;
+}
+
+/* Connecting line down the left side of each child group */
+.cd-tree-children {
+  margin-left: 1.1rem;
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--border);
+}
+
+.cd-tree-node.collapsed > .cd-tree-children {
+  display: none;
+}
+
+/* Slightly muted text for deeper levels */
+.cd-tree-children .cd-tree-row {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.cd-tree-children .cd-tree-row:hover { color: var(--text); }
 
 /* ── Filters ────────────────────────────────────────────────────────────── */
 
