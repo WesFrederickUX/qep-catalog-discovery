@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catalog Discovery — QEP Books</title>
+  <link rel="stylesheet" href="catalog.css">
+</head>
+<body>
+  <div class="layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-content">
+
+        <div class="sidebar-section">
+          <h2 class="sidebar-title">Catalog Discovery</h2>
+        </div>
+
+        <div class="sidebar-section">
+          <label for="publisher-select">Publisher</label>
+          <select id="publisher-select" class="cd-select">
+            <option value="PRH">Penguin Random House</option>
+          </select>
+        </div>
+
+        <div class="sidebar-section">
+          <label>Categories</label>
+          <div class="cd-category-list" id="category-list">
+            <div class="cd-list-msg">Loading categories…</div>
+          </div>
+        </div>
+
+        <button id="load-btn" class="btn-primary" disabled onclick="loadCatalog()">
+          Load Catalog
+        </button>
+
+        <div id="filters-panel" class="sidebar-section hidden">
+
+          <div class="filter-group">
+            <label>Format</label>
+            <div id="format-checkboxes" class="cd-check-group">
+              <label class="cd-check"><input type="checkbox" value="HC"> Hardcover</label>
+              <label class="cd-check"><input type="checkbox" value="TR"> Paperback</label>
+              <label class="cd-check"><input type="checkbox" value="MM"> Mass Market</label>
+              <label class="cd-check"><input type="checkbox" value="EL"> eBook</label>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label for="age-range">Age Range</label>
+            <input type="text" id="age-range" class="cd-input" placeholder="e.g. 6-9">
+          </div>
+
+          <div class="filter-group">
+            <label class="cd-check">
+              <input type="checkbox" id="coming-soon-toggle">
+              Coming Soon only
+            </label>
+          </div>
+
+          <div class="filter-group">
+            <label>Price Range</label>
+            <div class="price-range-row">
+              <input type="number" id="price-min" class="cd-input price-input" placeholder="Min" step="0.01" min="0">
+              <span>–</span>
+              <input type="number" id="price-max" class="cd-input price-input" placeholder="Max" step="0.01" min="0">
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label for="cd-search">Search</label>
+            <input type="text" id="cd-search" class="cd-input" placeholder="Title or author…" oninput="filterResults()">
+          </div>
+
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- Sidebar spacer -->
+    <div class="sidebar-spacer"></div>
+
+    <!-- Main content -->
+    <main class="main-content">
+
+      <!-- Empty state -->
+      <div id="empty-state" class="empty-state">
+        <h2>QEP Catalog Discovery</h2>
+        <p>Select a category from the left, then click <strong>Load Catalog</strong>.</p>
+        <p class="sub">Titles not already in your Shopify store will appear here.</p>
+      </div>
+
+      <!-- Loading -->
+      <div id="loading-state" class="loading-state hidden">
+        <div class="spinner"></div>
+        <span id="loading-text">Loading catalog…</span>
+      </div>
+
+      <!-- Results -->
+      <div id="results-area" class="hidden">
+
+        <div class="results-toolbar">
+          <div id="stats-bar" class="stats-bar"></div>
+        </div>
+
+        <div id="title-list" class="title-list"></div>
+
+        <div id="no-results" class="no-results hidden">
+          No titles found for the selected category.
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <script src="catalog.js"></script>
+</body>
+</html>

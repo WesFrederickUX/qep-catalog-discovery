@@ -1,0 +1,287 @@
+/* QEP Catalog Discovery — styles */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --sidebar-width: 260px;
+  --primary: #5c6ac4;
+  --primary-hover: #4959bd;
+  --border: #e1e3e5;
+  --bg: #f6f6f7;
+  --card-bg: #ffffff;
+  --text: #202223;
+  --text-muted: #6d7175;
+  --radius: 6px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.sidebar-spacer {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+}
+
+.main-content {
+  flex: 1;
+  padding: 1.5rem;
+  min-width: 0;
+}
+
+.sidebar-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sidebar-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.sidebar-section label, .filter-group > label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.hidden { display: none !important; }
+
+/* ── Form controls ──────────────────────────────────────────────────────── */
+
+.cd-select, .cd-input {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.cd-select:focus, .cd-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 0.55rem 1rem;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Category list ──────────────────────────────────────────────────────── */
+
+.cd-category-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+}
+
+.cd-list-msg {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cd-category-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cd-category-item:hover { background: rgba(0,0,0,0.03); }
+
+.cd-category-item.child {
+  padding-left: 1.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.cd-category-select-all {
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--card-bg);
+  z-index: 1;
+}
+
+/* ── Filters ────────────────────────────────────────────────────────────── */
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.cd-check-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.cd-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.price-range-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.price-input { width: 70px; }
+
+/* ── Empty / loading states ─────────────────────────────────────────────── */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  gap: 0.75rem;
+  color: var(--text-muted);
+}
+
+.empty-state h2 { color: var(--text); font-size: 1.5rem; }
+.empty-state .sub { font-size: 0.85rem; }
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 40vh;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Results ────────────────────────────────────────────────────────────── */
+
+.results-toolbar {
+  margin-bottom: 0.75rem;
+}
+
+.stats-bar {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0.4rem 0;
+}
+
+.stats-bar strong { color: var(--text); }
+
+/* ── Title list (Session 1 — basic list view) ───────────────────────────── */
+
+.title-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  overflow: hidden;
+}
+
+.title-row {
+  display: grid;
+  grid-template-columns: 48px 1fr 100px 80px 120px;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.title-row:last-child { border-bottom: none; }
+.title-row:hover { background: rgba(0,0,0,0.02); }
+
+.title-row-cover img {
+  width: 40px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.title-row-main { min-width: 0; }
+.title-row-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-row-author { color: var(--text-muted); font-size: 0.8rem; }
+
+.title-row-isbn { color: var(--text-muted); font-family: monospace; font-size: 0.8rem; }
+.title-row-price { font-weight: 600; }
+.title-row-format { color: var(--text-muted); font-size: 0.8rem; }
+
+.no-results {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
