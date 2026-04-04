@@ -112,7 +112,7 @@ router.get('/titles', async (req, res) => {
     let fetched  = 0;
 
     while (!closed) {
-      const { titles, total } = await module.fetchTitles(filters, start);
+      const { titles } = await module.fetchTitles(filters, start);
 
       if (!titles.length) break;
 
@@ -139,8 +139,7 @@ router.get('/titles', async (req, res) => {
         }
       }
 
-      // Check if more pages exist
-      if (start + 25 >= total || titles.length < 25) break;
+      if (titles.length < 25) break;
       start += 25;
 
       if (!closed) await new Promise(r => setTimeout(r, 200));
