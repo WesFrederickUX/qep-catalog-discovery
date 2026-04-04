@@ -259,38 +259,152 @@ function loadCatalog() {
 
 // ── Title row builder ─────────────────────────────────────────────────────
 
+const _detailCache = new Map();
+
 function buildTitleRow(t) {
-  const row = document.createElement('div');
-  row.className = 'title-row';
-  row.dataset.search = `${t.title} ${(t.authors ?? []).join(' ')}`.toLowerCase();
+  const wrap = document.createElement('div');
+  wrap.className = 'title-row-wrap' + (t.inStore ? ' in-store' : '');
+  wrap.dataset.search = `${t.title} ${(t.authors ?? []).join(' ')}`.toLowerCase();
 
   const price  = t.price != null ? `$${parseFloat(t.price).toFixed(2)}` : '—';
   const author = (t.authors ?? []).join(', ') || '—';
   const format = [t.formatName, t.imprint].filter(Boolean).join(' · ');
 
+  // Metadata chips: grade, age, language, subjects
+  const chips = [];
+  if (t.grade)    chips.push(t.grade);
+  if (t.ageRange) chips.push(t.ageRange);
+  if (t.language && t.language !== 'E') chips.push(t.language);
+  for (const s of (t.subjects ?? []).slice(0, 3)) chips.push(s);
+  const chipsHtml = chips.map(c => `<span class="title-chip">${esc(c)}</span>`).join('');
+
+  const row = document.createElement('div');
+  row.className = 'title-row';
   row.innerHTML = `
     <div class="title-row-cover">
       <img src="${esc(t.coverUrl)}" alt="" loading="lazy"
            onerror="this.style.visibility='hidden'">
     </div>
     <div class="title-row-main">
-      <div class="title-row-title" title="${esc(t.title)}">${esc(t.title)}</div>
+      <div class="title-row-title">${esc(t.title)}</div>
       <div class="title-row-author">${esc(author)}</div>
       ${format ? `<div class="title-row-format">${esc(format)}</div>` : ''}
+      ${chipsHtml ? `<div class="title-chips">${chipsHtml}</div>` : ''}
     </div>
     <div class="title-row-isbn">${esc(t.isbn ?? '—')}</div>
-    <div class="title-row-price">${price}</div>
-    <div class="title-row-format">${esc(t.ageRange ?? '')}</div>
+    <div class="title-row-price">
+      ${t.inStore ? '<span class="in-store-badge">In Store</span>' : price}
+    </div>
+    <div class="title-row-expand-btn" title="Expand">▶</div>
   `;
 
-  return row;
+  // Expandable detail panel (injected below the row)
+  const detail = document.createElement('div');
+  detail.className = 'title-row-detail hidden';
+
+  row.addEventListener('click', () => toggleTitleDetail(t, row, detail));
+
+  wrap.appendChild(row);
+  wrap.appendChild(detail);
+  return wrap;
+}
+
+async function toggleTitleDetail(t, row, detail) {
+  const isOpen = !detail.classList.contains('hidden');
+  const btn = row.querySelector('.title-row-expand-btn');
+
+  console.log('[catalog] row clicked — isbn:', t.isbn, '| currently open:', isOpen);
+
+  if (isOpen) {
+    detail.classList.add('hidden');
+    btn.textContent = '▶';
+    return;
+  }
+
+  detail.classList.remove('hidden');
+  btn.textContent = '▼';
+  console.log('[catalog] detail panel visible, hidden class present:', detail.classList.contains('hidden'));
+
+  // Already fetched — just show cached content
+  if (_detailCache.has(t.isbn)) {
+    console.log('[catalog] using cached detail for', t.isbn);
+    renderDetailPanel(detail, _detailCache.get(t.isbn));
+    console.log('[catalog] detail panel innerHTML length (cached):', detail.innerHTML.length);
+    return;
+  }
+
+  detail.innerHTML = '<div class="title-detail-loading">Loading…</div>';
+
+  try {
+    const res = await fetch(`/api/catalog/title/${encodeURIComponent(t.isbn)}`);
+    console.log('[catalog] detail fetch status:', res.status);
+    if (!res.ok) throw new Error(await res.text());
+    const full = await res.json();
+    console.log('[catalog] title detail received:', full);
+    _detailCache.set(t.isbn, full);
+    renderDetailPanel(detail, full);
+    console.log('[catalog] detail panel innerHTML length (rendered):', detail.innerHTML.length);
+  } catch (err) {
+    console.error('[catalog] detail fetch error:', err);
+    detail.innerHTML = `<div class="title-detail-loading" style="color:red">Failed to load detail: ${esc(err.message)}</div>`;
+  }
+}
+
+function renderDetailPanel(panel, t) {
+  const price  = t.price != null ? `$${parseFloat(t.price).toFixed(2)}` : '—';
+  const author = (t.authors ?? []).join(', ') || '—';
+
+  const allChips = [];
+  if (t.formatName) allChips.push(t.formatName);
+  if (t.imprint)    allChips.push(t.imprint);
+  if (t.grade)      allChips.push(t.grade);
+  if (t.ageRange)   allChips.push(t.ageRange);
+  if (t.language && t.language !== 'E') allChips.push(t.language);
+  if (t.pages)      allChips.push(`${t.pages} pages`);
+  if (t.onSaleDate) allChips.push(t.onSaleDate);
+  for (const s of (t.subjects ?? [])) allChips.push(s);
+  const chipsHtml = allChips.map(c => `<span class="title-chip">${esc(c)}</span>`).join('');
+
+  // Primary description: flapcopy → keynote → excerpt → fallback description
+  const primaryDesc = t.flapcopy || t.keynote || t.excerpt || t.description || '';
+
+  const jacketHtml = t.jacketquotes
+    ? `<blockquote class="title-detail-quote">${t.jacketquotes}</blockquote>`
+    : '';
+
+  const bioHtml = t.authorbio ? `
+    <details class="title-detail-bio">
+      <summary>About the Author</summary>
+      <div>${t.authorbio}</div>
+    </details>` : '';
+
+  panel.innerHTML = `
+    <div class="title-detail-inner">
+      <div class="title-detail-cover">
+        <img src="${esc(t.coverUrl)}" alt="">
+      </div>
+      <div class="title-detail-body">
+        <div class="title-detail-heading">
+          <span class="title-detail-name">${esc(t.title)}</span>
+          <span class="title-detail-price">${price}</span>
+        </div>
+        <div class="title-detail-author">${esc(author)}</div>
+        ${t.seriesName ? `<div class="title-detail-series">${esc(t.seriesName)}</div>` : ''}
+        ${chipsHtml ? `<div class="title-chips title-chips-detail">${chipsHtml}</div>` : ''}
+        ${primaryDesc ? `<div class="title-detail-desc">${primaryDesc}</div>` : ''}
+        ${jacketHtml}
+        ${bioHtml}
+        <div class="title-detail-isbn">ISBN: ${esc(t.isbn ?? '—')}</div>
+      </div>
+    </div>
+  `;
 }
 
 // ── Filter ────────────────────────────────────────────────────────────────
 
 function filterResults() {
   const q    = document.getElementById('cd-search').value.toLowerCase().trim();
-  const rows = document.querySelectorAll('#title-list .title-row');
+  const rows = document.querySelectorAll('#title-list .title-row-wrap');
   rows.forEach(r => {
     r.style.display = (!q || r.dataset.search.includes(q)) ? '' : 'none';
   });

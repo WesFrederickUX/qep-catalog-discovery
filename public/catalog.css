@@ -296,17 +296,37 @@ body {
   overflow: hidden;
 }
 
+.title-row-wrap {
+  border-bottom: 1px solid var(--border);
+}
+
+.title-row-wrap:last-child { border-bottom: none; }
+
+.title-row-wrap.in-store { background: #f0faf0; }
+.title-row-wrap.in-store .title-row:hover { background: #e6f5e6; }
+
+.in-store-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  background: #d1fad1;
+  color: #2a6b2a;
+  border: 1px solid #a8e0a8;
+  white-space: nowrap;
+}
+
 .title-row {
   display: grid;
-  grid-template-columns: 48px 1fr 100px 80px 120px;
+  grid-template-columns: 48px 1fr 110px 72px 28px;
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 1rem;
-  border-bottom: 1px solid var(--border);
   font-size: 0.85rem;
+  cursor: pointer;
 }
 
-.title-row:last-child { border-bottom: none; }
 .title-row:hover { background: rgba(0,0,0,0.02); }
 
 .title-row-cover img {
@@ -321,10 +341,133 @@ body {
 .title-row-main { min-width: 0; }
 .title-row-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title-row-author { color: var(--text-muted); font-size: 0.8rem; }
+.title-row-format { color: var(--text-muted); font-size: 0.75rem; }
 
-.title-row-isbn { color: var(--text-muted); font-family: monospace; font-size: 0.8rem; }
+.title-row-isbn  { color: var(--text-muted); font-family: monospace; font-size: 0.78rem; }
 .title-row-price { font-weight: 600; }
-.title-row-format { color: var(--text-muted); font-size: 0.8rem; }
+
+.title-row-expand-btn {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: center;
+  user-select: none;
+}
+
+/* ── Metadata chips ──────────────────────────────────────────────────────── */
+
+.title-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.3rem;
+}
+
+.title-chip {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Expanded detail panel ───────────────────────────────────────────────── */
+
+.title-row-detail {
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.title-detail-loading {
+  padding: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.title-detail-inner {
+  display: flex;
+  gap: 1.25rem;
+  padding: 1rem 1rem 1rem 1.5rem;
+}
+
+.title-detail-cover img {
+  width: 80px;
+  height: 112px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.title-detail-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.title-detail-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.title-detail-name  { font-weight: 700; font-size: 1rem; }
+.title-detail-price { font-weight: 600; color: var(--primary); white-space: nowrap; }
+.title-detail-author { color: var(--text-muted); font-size: 0.85rem; }
+.title-detail-series { font-style: italic; font-size: 0.82rem; color: var(--text-muted); }
+
+.title-chips-detail { margin-top: 0.4rem; }
+
+.title-detail-desc {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text);
+  margin-top: 0.5rem;
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+.title-detail-quote {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--primary);
+  font-style: italic;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: rgba(92,106,196,0.05);
+  border-radius: 0 3px 3px 0;
+}
+
+.title-detail-bio {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.title-detail-bio summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.8rem;
+  user-select: none;
+}
+
+.title-detail-bio p {
+  margin-top: 0.35rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.title-detail-isbn {
+  font-size: 0.78rem;
+  font-family: monospace;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
 
 .no-results {
   text-align: center;

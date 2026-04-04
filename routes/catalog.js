@@ -132,18 +132,17 @@ router.get('/titles', async (req, res) => {
         if (closed) break;
         fetched++;
 
-        // Skip ISBNs already in Shopify
-        if (title.isbn && shopifyIsbns.has(title.isbn)) {
-          excluded++;
-          continue;
+        const inStore = !!(title.isbn && shopifyIsbns.has(title.isbn));
+        if (inStore) excluded++;
+
+        // Optional price filter (applies to new titles only)
+        if (!inStore) {
+          if (priceMin && title.price !== null && title.price < parseFloat(priceMin)) continue;
+          if (priceMax && title.price !== null && title.price > parseFloat(priceMax)) continue;
+          found++;
         }
 
-        // Optional price filter
-        if (priceMin && title.price !== null && title.price < parseFloat(priceMin)) continue;
-        if (priceMax && title.price !== null && title.price > parseFloat(priceMax)) continue;
-
-        found++;
-        res.write(`event: title\ndata: ${JSON.stringify(title)}\n\n`);
+        res.write(`event: title\ndata: ${JSON.stringify({ ...title, inStore })}\n\n`);
 
         // Send progress every 10 titles
         if (found % 10 === 0) {
@@ -166,6 +165,24 @@ router.get('/titles', async (req, res) => {
     if (!closed) res.write(`event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`);
   } finally {
     res.end();
+  }
+});
+
+// ── GET /api/catalog/title/:isbn  (full PRH title detail) ─────────────────
+
+router.get('/title/:isbn', async (req, res) => {
+  const { isbn } = req.params;
+  const pub = req.query.publisher ?? 'PRH';
+  const module = publishers[pub];
+  if (!module) return res.status(400).json({ error: `Unknown publisher: ${pub}` });
+
+  try {
+    const detail = await module.fetchTitleDetail(isbn);
+    console.log(`[catalog] title detail ${isbn} — flapcopy: "${(detail.flapcopy ?? '').slice(0, 200)}"`);
+    res.json(detail);
+  } catch (err) {
+    console.error('[catalog] title detail error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
