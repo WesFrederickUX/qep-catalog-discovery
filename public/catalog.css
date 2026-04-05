@@ -513,3 +513,23 @@ body {
   padding: 3rem 1rem;
   color: var(--text-muted);
 }
+
+/* ── Add to Shopify button ───────────────────────────────────────────────── */
+
+.btn-add-shopify {
+  margin-top: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-add-shopify:hover:not(:disabled) { background: var(--primary-hover); }
+.btn-add-shopify:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-add-shopify.btn-add-success { background: #2a6b2a; }
+.btn-add-shopify.btn-add-error   { background: #c0392b; }

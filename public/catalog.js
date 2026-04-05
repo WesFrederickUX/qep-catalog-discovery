@@ -322,6 +322,7 @@ function buildTitleRow(t) {
           <span class="title-discount-pct">$</span>
           <input type="number" class="title-net-input" min="0" step="0.01" title="Net price">
         </div>
+        <button class="btn-add-shopify" title="Add to Shopify">Add to Shopify</button>
       ` : (t.inStore ? '<span class="in-store-badge">In Store</span>' : '')}
     </div>
     <div class="title-row-expand-btn" title="Expand">▶</div>
@@ -355,6 +356,15 @@ function buildTitleRow(t) {
       el.addEventListener('mousedown', e => e.stopPropagation());
       el.addEventListener('keydown',   e => e.stopPropagation());
     }
+
+    // Add to Shopify button
+    const addBtn = row.querySelector('.btn-add-shopify');
+    if (addBtn) {
+      addBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        addToShopify(t, row, discountInput, netInput);
+      });
+    }
   }
 
   // Expandable detail panel (injected below the row)
@@ -366,6 +376,66 @@ function buildTitleRow(t) {
   wrap.appendChild(row);
   wrap.appendChild(detail);
   return wrap;
+}
+
+async function addToShopify(t, row, discountInput, netInput) {
+  const addBtn = row.querySelector('.btn-add-shopify');
+  if (!addBtn) return;
+
+  addBtn.disabled = true;
+  addBtn.textContent = 'Adding…';
+
+  const discount  = discountInput  ? parseFloat(discountInput.value)  || 0    : 0;
+  const netPrice  = netInput       ? parseFloat(netInput.value)               : t.price;
+  const compareAt = t.price;
+
+  // Use cached detail for flapcopy/pages/authorbio if available
+  const cached    = _detailCache.get(t.isbn);
+  const flapcopy  = cached?.flapcopy  || '';
+  const authorbio = cached?.authorbio || '';
+  const pages     = cached?.pages     ?? t.pages ?? null;
+
+  const body = {
+    isbn:           t.isbn,
+    title:          t.title,
+    authors:        t.authors ?? [],
+    price:          netPrice,
+    compareAtPrice: compareAt,
+    discount,
+    pages,
+    onsale:         t.onSaleDate,
+    language:       t.language,
+    formatName:     t.formatName,
+    imprint:        t.imprint,
+    seoFriendlyUrl: t.seoFriendlyUrl,
+    coverUrl:       t.coverUrl,
+    flapcopy,
+    authorbio,
+    trim:           t.trim,
+    subjects:       t.subjects ?? [],
+    ageRange:       t.ageRange,
+    grade:          t.grade,
+  };
+
+  try {
+    const res  = await fetch('/api/catalog/add-to-shopify', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to add to Shopify');
+
+    addBtn.textContent = 'Added ✓';
+    addBtn.classList.add('btn-add-success');
+  } catch (err) {
+    console.error('[catalog] add-to-shopify error:', err);
+    addBtn.disabled = false;
+    addBtn.textContent = 'Add to Shopify';
+    addBtn.classList.add('btn-add-error');
+    alert(`Failed to add "${t.title}":\n${err.message}`);
+    setTimeout(() => addBtn.classList.remove('btn-add-error'), 3000);
+  }
 }
 
 async function toggleTitleDetail(t, row, detail) {

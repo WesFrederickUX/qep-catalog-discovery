@@ -255,6 +255,13 @@ Reuse from qep-isbn-lookup:
 - getCoverTypeGid() — cover type GID mapping
 - Author metaobject lookup and creation logic
 
+WEIGHT ESTIMATION:
+- Copy lib/weight-calculator.js from qep-isbn-lookup to qep-catalog-discovery/lib/weight-calculator.js
+- Use estimateWeight(pages, binding, publisher) to calculate weight for each book
+- PRH books: pages from PRH pages field, binding from format.description (map "Trade Paperback" → "paperback", "Hardcover" → "hardcover"), publisher from imprint.description
+- PRH is a trade publisher — the calculator will use lighter paper stock formulas
+- Pass estimated weight in grams to Shopify variant weight field during product creation
+
 app-ibp-book.condition is always “New”
 custom.discount — user sets via editable discount field on each card before adding
 cover image — from PRH _links rel=icon URL
