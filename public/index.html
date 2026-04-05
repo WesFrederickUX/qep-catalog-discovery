@@ -13,6 +13,12 @@
     <aside class="sidebar">
       <div class="sidebar-content">
 
+        <div class="sidebar-nav">
+          <a href="https://qep-isbn-lookup.onrender.com/" class="sidebar-nav-link">
+            ← Back to Lookup
+          </a>
+        </div>
+
         <div class="sidebar-section">
           <h2 class="sidebar-title">Catalog Discovery</h2>
         </div>
@@ -91,7 +97,14 @@
       <div id="results-area" class="hidden">
 
         <div class="results-toolbar">
+          <label class="cd-check">
+            <input type="checkbox" id="select-all-results" onchange="onSelectAllResults(this)">
+            Select All
+          </label>
           <div id="stats-bar" class="stats-bar"></div>
+          <button id="bulk-add-btn" class="btn-bulk-add" onclick="addSelectedToShopify()">
+            Add Selected to Shopify
+          </button>
         </div>
 
         <div id="title-list" class="title-list"></div>

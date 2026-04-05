@@ -58,6 +58,28 @@ body {
   gap: 0.75rem;
 }
 
+.sidebar-nav {
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.sidebar-nav-link:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
 .sidebar-title {
   font-size: 1rem;
   font-weight: 700;
@@ -266,13 +288,36 @@ body {
 /* ── Results ────────────────────────────────────────────────────────────── */
 
 .results-toolbar {
-  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg);
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
 }
 
+.btn-bulk-add {
+  padding: 0.35rem 0.75rem;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-bulk-add:hover:not(:disabled) { background: var(--primary-hover); }
+.btn-bulk-add:disabled { opacity: 0.6; cursor: not-allowed; }
+
 .stats-bar {
+  flex: 1;
   font-size: 0.85rem;
   color: var(--text-muted);
-  padding: 0.4rem 0;
 }
 
 .stats-bar strong { color: var(--text); }
@@ -312,12 +357,18 @@ body {
 
 .title-row {
   display: grid;
-  grid-template-columns: 48px 1fr 110px 120px 28px;
+  grid-template-columns: 24px 48px 1fr 110px 120px 28px;
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 1rem;
   font-size: 0.85rem;
   cursor: pointer;
+}
+
+.title-row-cb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .title-row:hover { background: rgba(0,0,0,0.02); }

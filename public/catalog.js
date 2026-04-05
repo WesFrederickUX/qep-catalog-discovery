@@ -184,6 +184,10 @@ function loadCatalog() {
   _allTitles = [];
   document.getElementById('title-list').innerHTML = '';
   document.getElementById('no-results').classList.add('hidden');
+  const bulkBtn = document.getElementById('bulk-add-btn');
+  if (bulkBtn) bulkBtn.textContent = 'Add Selected to Shopify';
+  const selAll = document.getElementById('select-all-results');
+  if (selAll) selAll.checked = false;
 
   showSection('loading-state');
   document.getElementById('loading-text').textContent = 'Loading catalog… 0 titles found';
@@ -275,6 +279,7 @@ const _detailCache = new Map();
 function buildTitleRow(t) {
   const wrap = document.createElement('div');
   wrap.className = 'title-row-wrap' + (t.inStore ? ' in-store' : '');
+  wrap.dataset.isbn       = t.isbn || '';
   wrap.dataset.search     = `${t.title} ${(t.authors ?? []).join(' ')}`.toLowerCase();
   wrap.dataset.formatName = (t.formatName ?? '').toLowerCase();
   wrap.dataset.ageRange   = (t.ageRange ?? '').toLowerCase();
@@ -299,6 +304,9 @@ function buildTitleRow(t) {
   const row = document.createElement('div');
   row.className = 'title-row';
   row.innerHTML = `
+    <div class="title-row-cb">
+      ${!t.inStore ? '<input type="checkbox" class="title-select-cb">' : ''}
+    </div>
     <div class="title-row-cover">
       <img src="${esc(t.coverUrl)}" alt="" loading="lazy"
            onerror="this.style.visibility='hidden'">
@@ -357,6 +365,13 @@ function buildTitleRow(t) {
       el.addEventListener('keydown',   e => e.stopPropagation());
     }
 
+    // Row select checkbox
+    const selCb = row.querySelector('.title-select-cb');
+    if (selCb) {
+      selCb.addEventListener('click',  e => e.stopPropagation());
+      selCb.addEventListener('change', () => updateBulkButton());
+    }
+
     // Add to Shopify button
     const addBtn = row.querySelector('.btn-add-shopify');
     if (addBtn) {
@@ -378,18 +393,13 @@ function buildTitleRow(t) {
   return wrap;
 }
 
-async function addToShopify(t, row, discountInput, netInput) {
-  const addBtn = row.querySelector('.btn-add-shopify');
-  if (!addBtn) return;
-
-  addBtn.disabled = true;
-  addBtn.textContent = 'Adding…';
-
-  const discount  = discountInput  ? parseFloat(discountInput.value)  || 0    : 0;
-  const netPrice  = netInput       ? parseFloat(netInput.value)               : t.price;
+// Core: build request body and POST to /api/catalog/add-to-shopify.
+// Returns the response data or throws on error.
+async function callAddToShopify(t, discountInput, netInput) {
+  const discount  = discountInput ? parseFloat(discountInput.value) || 0 : 0;
+  const netPrice  = netInput      ? parseFloat(netInput.value)           : t.price;
   const compareAt = t.price;
 
-  // Use cached detail for flapcopy/pages/authorbio if available
   const cached    = _detailCache.get(t.isbn);
   const flapcopy  = cached?.flapcopy  || '';
   const authorbio = cached?.authorbio || '';
@@ -417,17 +427,27 @@ async function addToShopify(t, row, discountInput, netInput) {
     grade:          t.grade,
   };
 
-  try {
-    const res  = await fetch('/api/catalog/add-to-shopify', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to add to Shopify');
+  const res  = await fetch('/api/catalog/add-to-shopify', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to add to Shopify');
+  return data;
+}
 
-    addBtn.textContent = 'Added ✓';
-    addBtn.classList.add('btn-add-success');
+async function addToShopify(t, row, discountInput, netInput) {
+  const addBtn = row.querySelector('.btn-add-shopify');
+  if (!addBtn) return;
+
+  addBtn.disabled = true;
+  addBtn.textContent = 'Adding…';
+
+  try {
+    await callAddToShopify(t, discountInput, netInput);
+    const wrap = row.closest('.title-row-wrap');
+    if (wrap) markRowAsAdded(wrap);
   } catch (err) {
     console.error('[catalog] add-to-shopify error:', err);
     addBtn.disabled = false;
@@ -436,6 +456,93 @@ async function addToShopify(t, row, discountInput, netInput) {
     alert(`Failed to add "${t.title}":\n${err.message}`);
     setTimeout(() => addBtn.classList.remove('btn-add-error'), 3000);
   }
+}
+
+// ── Post-add row update ───────────────────────────────────────────────────
+
+function markRowAsAdded(wrap) {
+  wrap.classList.add('in-store');
+  const cbCell = wrap.querySelector('.title-row-cb');
+  if (cbCell) cbCell.innerHTML = '';
+  const pricing = wrap.querySelector('.title-row-pricing');
+  if (pricing) {
+    // Keep the retail price element; replace everything else with the badge
+    const retail = pricing.querySelector('.title-row-retail');
+    pricing.innerHTML = '';
+    if (retail) pricing.appendChild(retail);
+    const badge = document.createElement('span');
+    badge.className = 'in-store-badge';
+    badge.textContent = 'In Store';
+    pricing.appendChild(badge);
+  }
+  updateBulkButton();
+}
+
+// ── Bulk add ──────────────────────────────────────────────────────────────
+
+function updateBulkButton() {
+  const count = document.querySelectorAll('#title-list .title-select-cb:checked:not(:disabled)').length;
+  const btn   = document.getElementById('bulk-add-btn');
+  if (btn) btn.textContent = count > 0 ? `Add ${count} Selected to Shopify` : 'Add Selected to Shopify';
+
+  // Keep "Select All" in sync with visible, enabled checkboxes
+  const allCbs = [...document.querySelectorAll('#title-list .title-row-wrap')]
+    .filter(w => w.style.display !== 'none')
+    .map(w => w.querySelector('.title-select-cb:not(:disabled)'))
+    .filter(Boolean);
+  const allCb = document.getElementById('select-all-results');
+  if (allCb) allCb.checked = allCbs.length > 0 && allCbs.every(cb => cb.checked);
+}
+
+function onSelectAllResults(checkbox) {
+  const visibleCbs = [...document.querySelectorAll('#title-list .title-row-wrap')]
+    .filter(w => w.style.display !== 'none')
+    .map(w => w.querySelector('.title-select-cb:not(:disabled)'))
+    .filter(Boolean);
+  for (const cb of visibleCbs) cb.checked = checkbox.checked;
+  updateBulkButton();
+}
+
+async function addSelectedToShopify() {
+  const checkedWraps = [...document.querySelectorAll('#title-list .title-row-wrap')]
+    .filter(w => w.querySelector('.title-select-cb:checked:not(:disabled)'));
+  if (!checkedWraps.length) return;
+
+  const btn   = document.getElementById('bulk-add-btn');
+  btn.disabled = true;
+
+  const total = checkedWraps.length;
+  let succeeded = 0;
+  let failed    = 0;
+
+  for (let i = 0; i < checkedWraps.length; i++) {
+    const wrap = checkedWraps[i];
+    const isbn = wrap.dataset.isbn;
+    const t    = _allTitles.find(x => x.isbn === isbn);
+    if (!t) { failed++; continue; }
+
+    btn.textContent = `Adding ${i + 1} of ${total}…`;
+
+    const row          = wrap.querySelector('.title-row');
+    const discountInput = row?.querySelector('.title-discount-input');
+    const netInput     = row?.querySelector('.title-net-input');
+    const addBtn       = row?.querySelector('.btn-add-shopify');
+    const cb           = wrap.querySelector('.title-select-cb');
+
+    try {
+      await callAddToShopify(t, discountInput, netInput);
+      succeeded++;
+      markRowAsAdded(wrap);
+    } catch (err) {
+      failed++;
+      if (addBtn) { addBtn.textContent = 'Error'; addBtn.title = err.message; addBtn.classList.add('btn-add-error'); }
+      console.error(`[bulk-add] "${t.title}" failed:`, err.message);
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = `Added ${succeeded} of ${total}${failed ? `. ${failed} failed.` : ''}`;
+  updateBulkButton();
 }
 
 async function toggleTitleDetail(t, row, detail) {
