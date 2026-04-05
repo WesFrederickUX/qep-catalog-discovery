@@ -3,7 +3,8 @@ import { readFile } from 'fs/promises';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { shopifyGraphQL, getAllAuthors, createAuthor } from '../lib/shopify.js';
+import { shopifyGraphQL, getAllAuthors, createAuthor, publishToChannels } from '../lib/shopify.js';
+import { mapCategoriesToSubjects } from '../../qep-isbn-lookup/lib/metaobjects.js';
 import { publishers } from '../lib/publishers/index.js';
 import { estimateWeight } from '../lib/weight-calculator.js';
 
@@ -295,6 +296,7 @@ function getAudienceGid(ageRange, grade) {
   return isValidGid(adults) ? adults : null;
 }
 
+
 function parseTrim(trim) {
   if (!trim) return null;
   const parts = trim.split(/\s*x\s*/i);
@@ -353,24 +355,41 @@ function formatBioAsRichText(plainText) {
   });
 }
 
-// Split a PRH author string that may be comma-separated into individual names.
-// Handles "First Last, First Last" but avoids splitting "Last, First" (single author).
+// Strip role prefixes like "by ", "illustrated by ", "edited by ", "and ", "with "
+// so the metaobject stores a clean author name like "David A. Adler".
+function stripAuthorPrefix(name) {
+  return name
+    .replace(/^illustrated\s+by\s+/i, '')
+    .replace(/^edited\s+by\s+/i, '')
+    .replace(/^and\s+/i, '')
+    .replace(/^with\s+/i, '')
+    .replace(/^by\s+/i, '')
+    .trim();
+}
+
+// Split a PRH author string into individual names.
+// Splitting order: semicolons (always) → " and " → commas (heuristic only).
+// The comma heuristic avoids splitting "Smith, John" (Last, First format):
+// commas only split when every resulting part contains a space (looks like a full name).
 function splitAuthors(rawList) {
   const names = [];
   for (const entry of rawList) {
-    const parts = entry.split(',').map(s => s.trim()).filter(Boolean);
-    if (parts.length <= 1) {
-      // Single name or already split
-      if (entry.trim()) names.push(entry.trim());
-    } else {
-      // Heuristic: if splitting produces parts that each look like full names
-      // (i.e. each part has a space in it), treat as multiple authors.
-      // Otherwise keep as-is (e.g. "Smith, John" is one author in Last, First format).
-      const allLookLikeFullNames = parts.every(p => p.includes(' '));
-      if (allLookLikeFullNames) {
-        names.push(...parts);
-      } else {
-        names.push(entry.trim());
+    const semicolonParts = entry.split(';').map(s => s.trim()).filter(Boolean);
+    for (const chunk of semicolonParts) {
+      // " and " (case-insensitive) always separates distinct authors/contributors
+      const andParts = chunk.split(/\s+and\s+/i).map(s => s.trim()).filter(Boolean);
+      for (const andChunk of andParts) {
+        const commaParts = andChunk.split(',').map(s => s.trim()).filter(Boolean);
+        if (commaParts.length <= 1) {
+          if (andChunk) names.push(andChunk);
+        } else {
+          const allLookLikeFullNames = commaParts.every(p => p.includes(' '));
+          if (allLookLikeFullNames) {
+            names.push(...commaParts);
+          } else {
+            names.push(andChunk);
+          }
+        }
       }
     }
   }
@@ -433,21 +452,25 @@ router.post('/add-to-shopify', async (req, res) => {
     // Strip HTML from authorbio and format as Shopify rich text
     const bioRichText = formatBioAsRichText(stripHtml(authorbioRaw));
 
-    // 2. Weight estimation — always pass "Penguin Random House" so trade formula is used
-    const binding     = normalizeBinding(formatName);
-    const weightGrams = estimateWeight(pages ?? null, binding, 'Penguin Random House') ?? 0;
+    // 2. Weight estimation
+    // Use imprint as publisher; fall back to "Penguin Random House" so the trade
+    // paper-stock formula is used for any imprint not explicitly in the trade list.
+    const binding        = normalizeBinding(formatName);
+    const weightPublisher = imprint || 'Penguin Random House';
+    const weightGrams    = estimateWeight(pages ?? null, binding, weightPublisher) ?? 0;
 
     // 3. Parse trim → dimensions
     const dims = parseTrim(trim);
 
-    // 4. Author metaobjects — split comma-separated names, find or create each
-    const rawAuthors = Array.isArray(authors) ? authors : [];
-    const authorList = splitAuthors(rawAuthors);
-    const authorGids = [];
-    for (const name of authorList) {
-      if (!name?.trim()) continue;
+    // 4. Author metaobjects — split and clean names for metaobjects;
+    //    keep rawAuthors as-is for the text field (preserves role descriptions).
+    const rawAuthors  = Array.isArray(authors) ? authors : [];
+    const splitNames  = splitAuthors(rawAuthors);          // split but still may have prefixes
+    const cleanNames  = splitNames.map(stripAuthorPrefix).filter(Boolean);
+    const authorGids  = [];
+    for (const name of cleanNames) {
       try {
-        const gid = await findOrCreateAuthorGid(name.trim(), bioRichText);
+        const gid = await findOrCreateAuthorGid(name, bioRichText);
         if (gid) authorGids.push(gid);
       } catch (e) {
         console.warn(`[add-to-shopify] author "${name}" skipped:`, e.message);
@@ -460,6 +483,7 @@ router.post('/add-to-shopify', async (req, res) => {
     const genreGids    = getGenreGids(subjects, ageRange, grade);
     const gradeLvlGids = getGradeLevelGids(grade, ageRange);
     const audienceGid  = getAudienceGid(ageRange, grade);
+    const subjectGids  = mapCategoriesToSubjects(subjects ?? [], title, description);
 
     // 6. Build metafields array
     const metafields = [];
@@ -467,8 +491,8 @@ router.post('/add-to-shopify', async (req, res) => {
     if (authorGids.length) {
       metafields.push({ namespace: 'custom',        key: 'authors',    value: JSON.stringify(authorGids),        type: 'list.metaobject_reference' });
     }
-    if (authorList.length) {
-      metafields.push({ namespace: 'app-ibp-book',  key: 'authors',    value: JSON.stringify(authorList),        type: 'list.single_line_text_field' });
+    if (cleanNames.length) {
+      metafields.push({ namespace: 'app-ibp-book',  key: 'authors',    value: JSON.stringify(cleanNames),        type: 'list.single_line_text_field' });
     }
     if (bindingGid) {
       metafields.push({ namespace: 'shopify',        key: 'book-cover-type', value: JSON.stringify([bindingGid]), type: 'list.metaobject_reference' });
@@ -484,6 +508,9 @@ router.post('/add-to-shopify', async (req, res) => {
     }
     if (audienceGid) {
       metafields.push({ namespace: 'shopify',        key: 'target-audience', value: JSON.stringify([audienceGid]), type: 'list.metaobject_reference' });
+    }
+    if (subjectGids.length) {
+      metafields.push({ namespace: 'custom',         key: 'subjects',   value: JSON.stringify(subjectGids),        type: 'list.metaobject_reference' });
     }
     if (pages) {
       metafields.push({ namespace: 'app-ibp-book',  key: 'pages',      value: String(pages),                    type: 'number_integer' });
@@ -553,6 +580,7 @@ router.post('/add-to-shopify', async (req, res) => {
       vendor:      imprint || 'Penguin Random House',
       productType: 'Book',
       status:      'ACTIVE',
+      tags:        subjects ?? [],
       productOptions: [{ name: 'Title', values: [{ name: 'Default Title' }] }],
       variants:    [variant],
       metafields,
@@ -590,6 +618,18 @@ router.post('/add-to-shopify', async (req, res) => {
 
     const product   = result.data?.productSet?.product;
     const productId = product?.id?.split('/').pop();
+
+    // 10. Publish to all sales channels (Online Store, Shop, POS, Google & YouTube)
+    const pub = getGids().publications ?? {};
+    const channelIds = [pub.onlineStore, pub.shop, pub.pointOfSale, pub.googleYoutube].filter(Boolean);
+    if (product?.id && channelIds.length) {
+      try {
+        await publishToChannels(product.id, channelIds);
+        console.log(`[add-to-shopify] published to ${channelIds.length} channels`);
+      } catch (e) {
+        console.warn('[add-to-shopify] publishToChannels failed (non-fatal):', e.message);
+      }
+    }
 
     // Invalidate the Shopify ISBN cache so this ISBN shows as in-store going forward
     _shopifyIsbns = null;
