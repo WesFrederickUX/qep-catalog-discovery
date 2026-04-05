@@ -188,19 +188,25 @@ range, text search
 7. Progress indicator during load
 Done when: Results look like a proper catalog browser with working filters.
 SESSION 3 — Add to Shopify
-Goal: One-click and bulk add to Shopify works.
+Goal: One-click and bulk add to Shopify works with full field mapping.
+
 Tasks:
 1. “Add to Shopify” button on each card
-2. Build /api/catalog/add-to-shopify endpoint (reuse qep-isbn-lookup product creation
-logic)
+2. Build /api/catalog/add-to-shopify endpoint (reuse qep-isbn-lookup product creation logic)
 3. On success: mark card as “Added ✓”, disable button
 4. Bulk checkbox selection on cards
 5. “Add Selected to Shopify” bulk action button
 6. After add: option to view product in Shopify admin
+
+DISCOUNT FIELD:
+- Each card must show an editable discount % field (same pattern as qep-isbn-lookup)
+- Pull the default discount % from the same source as the ISBN lookup tool — do not hardcode
+- User can modify the discount % per card before clicking Add to Shopify
+- Calculate and display the net price based on retail price and discount %
+
 price_source_url integration (2 changes required):
-1. In the catalog discovery frontend, when calling /api/catalog/add-to-shopify, include priceSourceUrl in the request body — this comes from the PRH API response URL field.
-2. In routes/api.js in the existing product creation endpoint (around line 316 where metafields are built), add:
-javascript
+1. In the catalog discovery frontend, when calling /api/catalog/add-to-shopify, include priceSourceUrl in the request body — built from PRH seoFriendlyUrl field prepended with https://www.penguinrandomhouse.com
+2. In routes/api.js in the existing qep-isbn-lookup product creation endpoint (around line 316 where metafields are built), add:
 if (bookData.priceSourceUrl) {
   metafields.push({
     namespace: 'custom',
@@ -209,10 +215,51 @@ if (bookData.priceSourceUrl) {
     type: 'url'
   });
 }
-This ensures every book added via the catalog tool is immediately ready for the price monitor without any manual URL entry.
+The if (bookData.priceSourceUrl) conditional ensures the normal ISBN lookup flow is unaffected. Do not remove this conditional.
 
+AUTHOR METAOBJECT HANDLING:
+- Before creating a product, check if the author already exists as a metaobject in Shopify by searching the existing authors metaobject list
+- If the author does not exist, create a new author metaobject in Shopify with: name (from PRH author field), bio (from PRH content endpoint authorbio field, HTML stripped)
+- If the author exists, use their existing GID
+- The author GID is then passed as custom.authors metafield on the product
+- Reuse the author lookup and creation logic from qep-isbn-lookup where possible
+- PRH author field is a single string — if multiple authors, they may be comma-separated and need to be split
 
-Done when: Books can be added to Shopify individually and in bulk.SESSION 4 — Polish & Integration Prep
+SHOPIFY FIELD MAPPING FROM PRH API:
+
+Available from PRH list response (no extra API call):
+- title → product title
+- author → app-ibp-book.authors
+- price → compareAtPrice
+- isbn/isbnStr → variant barcode
+- pages → app-ibp-book.pages
+- onsale → app-ibp-book.publication_date and publication_year
+- language → app-ibp-book.language and shopify.language-version GID
+- format.description → app-ibp-book.binding and shopify.book-cover-type GID
+- subjects → shopify.genre, custom.subjects (use existing mapping functions from qep-isbn-lookup)
+- age/grade → custom.grade_levels, shopify.target-audience (use existing mapping functions)
+- trim → app-ibp-book.dimensions (parse “5-1/16 x 7-3/4” format)
+- imprint.description → vendor field
+- seoFriendlyUrl → custom.price_source_url (prepend https://www.penguinrandomhouse.com)
+
+Requires extra API call (/content endpoint — fetch on expand or at add time):
+- flapcopy → product body_html/description
+
+Reuse from qep-isbn-lookup:
+- mapCategoriesToGenres() — genre GID mapping
+- mapCategoriesToSubjects() — subject GID mapping
+- mapToGradeLevels() — grade level GID mapping
+- determineTargetAudience() — audience GID mapping
+- filterValidGids() — GID validation
+- getLanguageGid() — language GID mapping
+- getCoverTypeGid() — cover type GID mapping
+- Author metaobject lookup and creation logic
+
+app-ibp-book.condition is always “New”
+custom.discount — user sets via editable discount field on each card before adding
+cover image — from PRH _links rel=icon URL
+
+Done when: Books can be added to Shopify individually and in bulk with all fields correctly populated.SESSION 4 — Polish & Integration Prep
 Goal: Production-ready, ready to merge into qep-isbn-lookup.
 Tasks:
 1. Error handling (PRH API down, Shopify errors, etc.)
