@@ -1,8 +1,13 @@
 import express from 'express';
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { shopifyGraphQL } from '../lib/shopify.js';
 import { publishers } from '../lib/publishers/index.js';
 
 const router = express.Router();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DISCOUNTS_FILE = join(__dirname, '../data/discounts.json');
 
 // ── In-memory caches ──────────────────────────────────────────────────────
 
@@ -87,10 +92,10 @@ async function getShopifyIsbnSet() {
 // ── GET /api/catalog/titles  (SSE) ────────────────────────────────────────
 
 router.get('/titles', async (req, res) => {
-  const { publisher = 'PRH', catUri, format, ageRange, comingSoon, keyword, priceMin, priceMax } = req.query;
+  const { publisher = 'PRH', catUri, format, comingSoon, keyword } = req.query;
   const module = publishers[publisher];
   if (!module) { res.status(400).json({ error: `Unknown publisher: ${publisher}` }); return; }
-  if (!catUri)  { res.status(400).json({ error: 'catUri is required' }); return; }
+  if (!catUri && !comingSoon) { res.status(400).json({ error: 'catUri or comingSoon is required' }); return; }
 
   // SSE setup
   res.setHeader('Content-Type', 'text/event-stream');
@@ -105,7 +110,7 @@ router.get('/titles', async (req, res) => {
     // Ensure Shopify ISBN cache is ready before streaming
     const shopifyIsbns = await getShopifyIsbnSet();
 
-    const filters = { catUri, format, ageRange, comingSoon, keyword };
+    const filters = { catUri, format, comingSoon, keyword };
     let start    = 0;
     let found    = 0;
     let excluded = 0;
@@ -135,12 +140,7 @@ router.get('/titles', async (req, res) => {
         const inStore = !!(title.isbn && shopifyIsbns.has(title.isbn));
         if (inStore) excluded++;
 
-        // Optional price filter (applies to new titles only)
-        if (!inStore) {
-          if (priceMin && title.price !== null && title.price < parseFloat(priceMin)) continue;
-          if (priceMax && title.price !== null && title.price > parseFloat(priceMax)) continue;
-          found++;
-        }
+        if (!inStore) found++;
 
         res.write(`event: title\ndata: ${JSON.stringify({ ...title, inStore })}\n\n`);
 
@@ -183,6 +183,18 @@ router.get('/title/:isbn', async (req, res) => {
   } catch (err) {
     console.error('[catalog] title detail error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/catalog/discounts ────────────────────────────────────────────
+
+router.get('/discounts', async (_req, res) => {
+  try {
+    const data = await readFile(DISCOUNTS_FILE, 'utf-8');
+    res.json(JSON.parse(data));
+  } catch (err) {
+    console.error('[catalog] discounts error:', err.message);
+    res.json({});
   }
 });
 

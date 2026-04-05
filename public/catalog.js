@@ -5,11 +5,31 @@
 let _allTitles  = [];   // full cached result from SSE stream
 let _categories = [];   // flat category list from API
 let _currentEs  = null; // active EventSource
+let _discounts  = {};   // publisher discount map from API
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
 async function init() {
-  await loadCategories();
+  await Promise.all([loadCategories(), loadDiscounts()]);
+}
+
+async function loadDiscounts() {
+  try {
+    const res = await fetch('/api/catalog/discounts');
+    if (res.ok) _discounts = await res.json();
+  } catch (err) {
+    console.warn('[catalog] could not load discounts:', err.message);
+  }
+}
+
+// Exact case-insensitive match only — no partial/fuzzy matching.
+// Priority: imprint → publisher name → 0
+function getDiscount(imprint, publisherName) {
+  const lookup = name => {
+    if (!name) return undefined;
+    return _discounts[name.toLowerCase().trim()];
+  };
+  return lookup(imprint) ?? lookup(publisherName) ?? 0;
 }
 
 async function loadCategories() {
@@ -154,8 +174,10 @@ function getCheckedCatUris() {
 // ── Load catalog ──────────────────────────────────────────────────────────
 
 function loadCatalog() {
-  const catUris = getCheckedCatUris();
-  if (!catUris.length) { alert('Please select at least one category.'); return; }
+  const comingSoon = document.getElementById('coming-soon-toggle').checked;
+  const catUris    = getCheckedCatUris();
+
+  if (!comingSoon && !catUris.length) { alert('Please select at least one category.'); return; }
 
   if (_currentEs) { _currentEs.close(); _currentEs = null; }
 
@@ -167,22 +189,11 @@ function loadCatalog() {
   document.getElementById('loading-text').textContent = 'Loading catalog… 0 titles found';
   document.getElementById('stats-bar').textContent = '';
 
-  const publisher   = document.getElementById('publisher-select').value;
-  const format      = getCheckedFormats();
-  const ageRange    = document.getElementById('age-range').value.trim();
-  const comingSoon  = document.getElementById('coming-soon-toggle').checked || '';
-  const priceMin    = document.getElementById('price-min').value;
-  const priceMax    = document.getElementById('price-max').value;
+  const publisher = document.getElementById('publisher-select').value;
 
-  // For Session 1: stream the first checked catUri (multi-cat in Session 2)
-  const catUri = catUris[0];
-
-  const params = new URLSearchParams({ publisher, catUri });
-  if (format)     params.set('format', format);
-  if (ageRange)   params.set('ageRange', ageRange);
-  if (comingSoon) params.set('comingSoon', 'true');
-  if (priceMin)   params.set('priceMin', priceMin);
-  if (priceMax)   params.set('priceMax', priceMax);
+  const params = new URLSearchParams({ publisher });
+  if (catUris.length) params.set('catUri', catUris[0]);
+  if (comingSoon)     params.set('comingSoon', 'true');
 
   const es = new EventSource(`/api/catalog/titles?${params}`);
   _currentEs = es;
@@ -264,9 +275,12 @@ const _detailCache = new Map();
 function buildTitleRow(t) {
   const wrap = document.createElement('div');
   wrap.className = 'title-row-wrap' + (t.inStore ? ' in-store' : '');
-  wrap.dataset.search = `${t.title} ${(t.authors ?? []).join(' ')}`.toLowerCase();
+  wrap.dataset.search     = `${t.title} ${(t.authors ?? []).join(' ')}`.toLowerCase();
+  wrap.dataset.formatName = (t.formatName ?? '').toLowerCase();
+  wrap.dataset.ageRange   = (t.ageRange ?? '').toLowerCase();
 
-  const price  = t.price != null ? `$${parseFloat(t.price).toFixed(2)}` : '—';
+  const retailPrice = t.price != null ? parseFloat(t.price) : null;
+  const priceLabel  = retailPrice != null ? `$${retailPrice.toFixed(2)}` : '—';
   const author = (t.authors ?? []).join(', ') || '—';
   const format = [t.formatName, t.imprint].filter(Boolean).join(' · ');
 
@@ -277,6 +291,10 @@ function buildTitleRow(t) {
   if (t.language && t.language !== 'E') chips.push(t.language);
   for (const s of (t.subjects ?? []).slice(0, 3)) chips.push(s);
   const chipsHtml = chips.map(c => `<span class="title-chip">${esc(c)}</span>`).join('');
+
+  // Discount: exact match on imprint first, then sidebar publisher, then 0
+  const publisherName = document.getElementById('publisher-select')?.selectedOptions[0]?.text ?? '';
+  const defaultDiscount = getDiscount(t.imprint, publisherName);
 
   const row = document.createElement('div');
   row.className = 'title-row';
@@ -292,11 +310,52 @@ function buildTitleRow(t) {
       ${chipsHtml ? `<div class="title-chips">${chipsHtml}</div>` : ''}
     </div>
     <div class="title-row-isbn">${esc(t.isbn ?? '—')}</div>
-    <div class="title-row-price">
-      ${t.inStore ? '<span class="in-store-badge">In Store</span>' : price}
+    <div class="title-row-pricing">
+      <div class="title-row-retail">${priceLabel}</div>
+      ${retailPrice != null && !t.inStore ? `
+        <div class="title-row-discount-row">
+          <span class="title-discount-pct">%</span>
+          <input type="number" class="title-discount-input" value="${defaultDiscount}"
+                 min="0" max="100" step="1" title="Discount %">
+        </div>
+        <div class="title-row-discount-row">
+          <span class="title-discount-pct">$</span>
+          <input type="number" class="title-net-input" min="0" step="0.01" title="Net price">
+        </div>
+      ` : (t.inStore ? '<span class="in-store-badge">In Store</span>' : '')}
     </div>
     <div class="title-row-expand-btn" title="Expand">▶</div>
   `;
+
+  // Wire up bidirectional discount ↔ net price
+  if (retailPrice != null && !t.inStore) {
+    const discountInput = row.querySelector('.title-discount-input');
+    const netInput      = row.querySelector('.title-net-input');
+
+    function netFromDiscount() {
+      const pct = parseFloat(discountInput.value) || 0;
+      netInput.value = (retailPrice * (1 - pct / 100)).toFixed(2);
+    }
+
+    function discountFromNet() {
+      const net = parseFloat(netInput.value);
+      if (!isNaN(net) && retailPrice > 0) {
+        discountInput.value = ((1 - net / retailPrice) * 100).toFixed(1);
+      }
+    }
+
+    netFromDiscount(); // initialise net from default discount
+
+    discountInput.addEventListener('input', netFromDiscount);
+    netInput.addEventListener('input', discountFromNet);
+
+    // Prevent row click (expand toggle) from firing when interacting with inputs
+    for (const el of [discountInput, netInput]) {
+      el.addEventListener('click',     e => e.stopPropagation());
+      el.addEventListener('mousedown', e => e.stopPropagation());
+      el.addEventListener('keydown',   e => e.stopPropagation());
+    }
+  }
 
   // Expandable detail panel (injected below the row)
   const detail = document.createElement('div');
@@ -402,17 +461,18 @@ function renderDetailPanel(panel, t) {
 
 // ── Filter ────────────────────────────────────────────────────────────────
 
-function filterResults() {
-  const q    = document.getElementById('cd-search').value.toLowerCase().trim();
+function applyFilters() {
+  const q          = (document.getElementById('cd-search')?.value ?? '').toLowerCase().trim();
+  const fmtChecked = [...document.querySelectorAll('#format-checkboxes input:checked')]
+    .map(cb => cb.value.toLowerCase());
+
   const rows = document.querySelectorAll('#title-list .title-row-wrap');
   rows.forEach(r => {
-    r.style.display = (!q || r.dataset.search.includes(q)) ? '' : 'none';
+    const matchSearch = !q || r.dataset.search.includes(q);
+    const matchFmt    = fmtChecked.length === 0 ||
+      fmtChecked.some(f => (r.dataset.formatName ?? '').toLowerCase().includes(f));
+    r.style.display = (matchSearch && matchFmt) ? '' : 'none';
   });
-}
-
-function getCheckedFormats() {
-  return [...document.querySelectorAll('#format-checkboxes input:checked')]
-    .map(cb => cb.value).join(',');
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────

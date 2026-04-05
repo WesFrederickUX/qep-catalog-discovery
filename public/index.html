@@ -31,6 +31,13 @@
           </div>
         </div>
 
+        <div class="filter-group">
+          <label class="cd-check">
+            <input type="checkbox" id="coming-soon-toggle">
+            Coming Soon only
+          </label>
+        </div>
+
         <button id="load-btn" class="btn-primary" disabled onclick="loadCatalog()">
           Load Catalog
         </button>
@@ -38,40 +45,23 @@
         <div id="filters-panel" class="sidebar-section hidden">
 
           <div class="filter-group">
+            <label for="cd-search">Search</label>
+            <input type="text" id="cd-search" class="cd-input" placeholder="Title or author…" oninput="applyFilters()">
+          </div>
+
+          <div class="filter-group">
             <label>Format</label>
             <div id="format-checkboxes" class="cd-check-group">
-              <label class="cd-check"><input type="checkbox" value="HC"> Hardcover</label>
-              <label class="cd-check"><input type="checkbox" value="TR"> Paperback</label>
-              <label class="cd-check"><input type="checkbox" value="MM"> Mass Market</label>
-              <label class="cd-check"><input type="checkbox" value="EL"> eBook</label>
+              <label class="cd-check"><input type="checkbox" value="hardcover"> Hardcover</label>
+              <label class="cd-check"><input type="checkbox" value="trade paperback"> Trade Paperback</label>
+              <label class="cd-check"><input type="checkbox" value="mass market"> Mass Market</label>
+              <label class="cd-check"><input type="checkbox" value="ebook"> eBook</label>
             </div>
           </div>
 
-          <div class="filter-group">
-            <label for="age-range">Age Range</label>
-            <input type="text" id="age-range" class="cd-input" placeholder="e.g. 6-9">
-          </div>
-
-          <div class="filter-group">
-            <label class="cd-check">
-              <input type="checkbox" id="coming-soon-toggle">
-              Coming Soon only
-            </label>
-          </div>
-
-          <div class="filter-group">
-            <label>Price Range</label>
-            <div class="price-range-row">
-              <input type="number" id="price-min" class="cd-input price-input" placeholder="Min" step="0.01" min="0">
-              <span>–</span>
-              <input type="number" id="price-max" class="cd-input price-input" placeholder="Max" step="0.01" min="0">
-            </div>
-          </div>
-
-          <div class="filter-group">
-            <label for="cd-search">Search</label>
-            <input type="text" id="cd-search" class="cd-input" placeholder="Title or author…" oninput="filterResults()">
-          </div>
+          <button class="btn-primary" onclick="applyFilters()" style="margin-top:0.25rem">
+            Apply Filters
+          </button>
 
         </div>
 
